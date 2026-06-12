@@ -190,8 +190,50 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
 
         .filter-actions {
             display: flex;
+            align-items: center;
             gap: 12px;
-            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .filter-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            background: rgba(30, 58, 95, 0.08);
+            border: 1px solid rgba(30, 58, 95, 0.15);
+            border-radius: 14px;
+            font-size: 12px;
+            color: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-tag:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+
+        .filter-tag .tag-close { font-size: 14px; line-height: 1; opacity: 0.6; }
+        .filter-tag:hover .tag-close { opacity: 1; }
+
+        .dark .filter-tag {
+            background: rgba(30, 58, 95, 0.3);
+            border-color: rgba(30, 58, 95, 0.5);
+            color: var(--text);
+        }
+        .dark .filter-tag:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: #ef4444;
+            color: #ef4444;
         }
 
         /* Cards Grid */
@@ -815,7 +857,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             <div class="filter-row">
                 <div class="filter-group">
                     <label>型号</label>
-                    <select id="filterModel">
+                    <select id="filterModel" onchange="applyFilters()">
                         <option value="">全部型号</option>
                         <option value="Q20">Q20</option>
                         <option value="S30">S30</option>
@@ -824,7 +866,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 </div>
                 <div class="filter-group">
                     <label>分类</label>
-                    <select id="filterCategory">
+                    <select id="filterCategory" onchange="applyFilters()">
                         <option value="">全部分类</option>
                         <option value="hardware">硬件不良</option>
                         <option value="human">人为不良</option>
@@ -835,7 +877,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 </div>
                 <div class="filter-group">
                     <label>部件</label>
-                    <select id="filterPart">
+                    <select id="filterPart" onchange="applyFilters()">
                         <option value="">全部部件</option>
                         <option value="主板">主板</option>
                         <option value="屏幕">屏幕</option>
@@ -848,6 +890,18 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                         <option value="排线">排线</option>
                         <option value="软件">软件</option>
                         <option value="其他">其他</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>故障原因</label>
+                    <select id="filterReason" onchange="applyFilters()">
+                        <option value="">全部原因</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>责任归属</label>
+                    <select id="filterResponsibility" onchange="applyFilters()">
+                        <option value="">全部责任</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -864,8 +918,8 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 </div>
             </div>
             <div class="filter-actions">
+                <div id="filterTags" class="filter-tags"></div>
                 <button class="btn btn-outline" onclick="resetFilters()">重置</button>
-                <button class="btn btn-primary" onclick="applyFilters()">应用筛选</button>
             </div>
         </section>
 
@@ -882,7 +936,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             <div class="kpi-card" onclick="filterByCategory('')">
                 <div class="icon blue">📋</div>
                 <div class="value" id="kpiTotal">0</div>
-                <div class="label">总维修数</div>
+                <div class="label">总维修数（近7日）</div>
                 <div class="change" id="kpiTotalChange"></div>
             </div>
             <div class="kpi-card" onclick="filterByToday()">
@@ -922,7 +976,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 <div class="chart-container" id="chartPareto"></div>
             </div>
             <div class="chart-card">
-                <h3>⚖️ 责任划分占比</h3>
+                <h3>⚖️ 责任划分占比 <span class="drill-hint">(点击下钻)</span></h3>
                 <div class="chart-container" id="chartResponsibility"></div>
             </div>
         </div>
@@ -1121,6 +1175,8 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 model: '',
                 category: '',
                 part: '',
+                reason: '',
+                responsibility: '',
                 startDate: '',
                 endDate: '',
                 keyword: ''
@@ -1312,25 +1368,17 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             updateSyncStatus('syncing');
             
             try {
-                // 优先使用内嵌飞书数据
+                // 使用内嵌飞书数据（全量，不截断）
                 if (window.EMBEDDED_AFTER_SALES_DATA && window.EMBEDDED_AFTER_SALES_DATA.length > 0) {
-                    const sevenDaysAgo = new Date();
-                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                    const cutoffDate = sevenDaysAgo.toISOString().split('T')[0];
-                    
-                    // 合并内嵌数据（已处理好的格式，直接使用）
-                    // 仅保留维修完成日期非空的记录
                     const embeddedWithDate = window.EMBEDDED_AFTER_SALES_DATA.filter(r => r.date);
                     state.rawData = mergeAndDeduplicate(state.rawData, embeddedWithDate);
-                    // 再按7天日期范围过滤
-                    state.rawData = state.rawData.filter(r => r.date >= cutoffDate);
                     
                     localStorage.setItem('afterSalesData', JSON.stringify(state.rawData));
                     localStorage.setItem('lastSyncTime', new Date().toISOString());
                     
                     updateSyncStatus('success');
-                    showToast(`同步完成，近7天共 ${state.rawData.length} 条记录`, 'success');
-                    
+                    showToast(`同步完成，共 ${state.rawData.length} 条记录`, 'success');
+                    populateDynamicFilters();
                     applyFilters();
                     updateAllCharts();
                     return;
@@ -1352,20 +1400,16 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 // 去重合并
                 state.rawData = mergeAndDeduplicate(state.rawData, allRecords);
                 
-                // 仅保留维修完成日期非空的记录，再按7天日期范围过滤
+                // 仅保留维修完成日期非空的记录
                 state.rawData = state.rawData.filter(r => r.date);
-                const sevenDaysAgo = new Date();
-                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                const cutoffDate = sevenDaysAgo.toISOString().split('T')[0];
-                state.rawData = state.rawData.filter(r => r.date >= cutoffDate);
                 
                 // 保存到localStorage
                 localStorage.setItem('afterSalesData', JSON.stringify(state.rawData));
                 localStorage.setItem('lastSyncTime', new Date().toISOString());
                 
                 updateSyncStatus('success');
-                showToast(`同步完成，近7天共 ${state.rawData.length} 条记录`, 'success');
-                
+                showToast(`同步完成，共 ${state.rawData.length} 条记录`, 'success');
+                populateDynamicFilters();
                 applyFilters();
                 updateAllCharts();
                 
@@ -1390,27 +1434,22 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
 
         function loadFromStorage() {
             try {
-                // 优先加载内嵌飞书数据
+                // 加载全部内嵌飞书数据（不再截断7天）
                 if (window.EMBEDDED_AFTER_SALES_DATA && window.EMBEDDED_AFTER_SALES_DATA.length > 0) {
-                    const sevenDaysAgo = new Date();
-                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                    const cutoffDate = sevenDaysAgo.toISOString().split('T')[0];
-                    state.rawData = window.EMBEDDED_AFTER_SALES_DATA.filter(r => r.date && r.date >= cutoffDate);
-                    console.log('[Dashboard] loadFromStorage: loaded', state.rawData.length, 'records from embedded data (cutoff:', cutoffDate, ', only records with 维修完成日期)');
+                    state.rawData = window.EMBEDDED_AFTER_SALES_DATA.filter(r => r.date);
+                    console.log('[Dashboard] loadFromStorage: loaded', state.rawData.length, 'records from embedded data (all records with date)');
                     localStorage.setItem('afterSalesData', JSON.stringify(state.rawData));
                     localStorage.setItem('lastSyncTime', new Date().toISOString());
-                    document.getElementById('cacheStatus').textContent = '数据源: 飞书多维表格（内嵌）';
+                    document.getElementById('cacheStatus').textContent = '数据源: 飞书多维表格（内嵌全量）';
+                    populateDynamicFilters();
                     return;
                 }
                 
                 const saved = localStorage.getItem('afterSalesData');
                 if (saved) {
                     let data = JSON.parse(saved);
-                    // 仅保留维修完成日期非空的记录，再按7天日期范围过滤
-                    const sevenDaysAgo = new Date();
-                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                    const cutoffDate = sevenDaysAgo.toISOString().split('T')[0];
-                    state.rawData = data.filter(r => r.date && r.date >= cutoffDate);
+                    state.rawData = data.filter(r => r.date);
+                    populateDynamicFilters();
                 }
                 
                 const lastSync = localStorage.getItem('lastSyncTime');
@@ -1443,6 +1482,16 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 filtered = filtered.filter(r => r.part === state.filters.part);
             }
             
+            // 故障原因筛选
+            if (state.filters.reason) {
+                filtered = filtered.filter(r => r.reason === state.filters.reason);
+            }
+            
+            // 责任归属筛选
+            if (state.filters.responsibility) {
+                filtered = filtered.filter(r => r.responsibility === state.filters.responsibility);
+            }
+            
             // 日期范围筛选
             if (state.filters.startDate) {
                 filtered = filtered.filter(r => r.date >= state.filters.startDate);
@@ -1471,6 +1520,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             updateAllCharts();
             updateTable();
             updateInsight();
+            updateFilterTags();
         }
 
         function resetFilters() {
@@ -1478,6 +1528,8 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
                 model: '',
                 category: '',
                 part: '',
+                reason: '',
+                responsibility: '',
                 startDate: '',
                 endDate: '',
                 keyword: ''
@@ -1486,6 +1538,8 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             document.getElementById('filterModel').value = '';
             document.getElementById('filterCategory').value = '';
             document.getElementById('filterPart').value = '';
+            document.getElementById('filterReason').value = '';
+            document.getElementById('filterResponsibility').value = '';
             document.getElementById('filterStartDate').value = '';
             document.getElementById('filterEndDate').value = '';
             document.getElementById('filterKeyword').value = '';
@@ -1507,21 +1561,16 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             const softwareCount = data.filter(r => r.category === 'software').length;
             const weekCount = data.filter(r => r.date >= weekAgo).length;
             
-            // 计算上周同期数据
-            const lastWeekTotal = state.lastWeekData.length;
-            const lastWeekToday = state.lastWeekData.filter(r => {
-                const d = new Date(r.date);
-                const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                return d.toISOString().split('T')[0] === yesterday.toISOString().split('T')[0];
+            // 上周同期数据（从rawData计算，而非filteredData）
+            const lastWeekData = state.rawData.filter(r => r.date >= twoWeeksAgo && r.date < weekAgo);
+            const lastWeekTotal = lastWeekData.length;
+            const lastWeekToday = state.rawData.filter(r => {
+                const yesterday = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                return r.date === yesterday.toISOString().split('T')[0];
             }).length;
-            const lastWeekHardware = state.lastWeekData.filter(r => r.category === 'hardware').length;
-            const lastWeekHuman = state.lastWeekData.filter(r => r.category === 'human').length;
-            const lastWeekSoftware = state.lastWeekData.filter(r => r.category === 'software').length;
-            const lastWeek7Days = state.lastWeekData.filter(r => {
-                const d = new Date(r.date);
-                const weekAgoDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-                return d >= weekAgoDate && d <= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            }).length;
+            const lastWeekHardware = lastWeekData.filter(r => r.category === 'hardware').length;
+            const lastWeekHuman = lastWeekData.filter(r => r.category === 'human').length;
+            const lastWeekSoftware = lastWeekData.filter(r => r.category === 'software').length;
             
             return {
                 total, todayCount, hardwareCount, humanCount, softwareCount, weekCount,
@@ -1541,8 +1590,8 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
         function updateKPIs() {
             const kpis = calculateKPIs(state.filteredData);
             
-            document.getElementById('kpiTotal').textContent = kpis.total;
-            document.getElementById('kpiTotalChange').innerHTML = formatChange(kpis.total, kpis.lastWeekTotal);
+            document.getElementById('kpiTotal').textContent = kpis.weekCount;
+            document.getElementById('kpiTotalChange').innerHTML = formatChange(kpis.weekCount, kpis.lastWeekTotal);
             
             document.getElementById('kpiToday').textContent = kpis.todayCount;
             document.getElementById('kpiTodayChange').innerHTML = formatChange(kpis.todayCount, kpis.lastWeekToday);
@@ -1563,9 +1612,9 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             state.charts.modelCompare = echarts.init(document.getElementById('chartModelCompare'));
             state.charts.modelCompare.on('click', function(params) {
                 if (params.name) {
-                    state.filters.model = params.name;
-                    document.getElementById('filterModel').value = params.name;
-                    applyFilters();
+                    // 提取型号名（去掉括号里的数量）
+                    const model = params.name.split(' (')[0];
+                    filterByModel(model);
                 }
             });
             
@@ -1573,23 +1622,35 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             state.charts.pareto = echarts.init(document.getElementById('chartPareto'));
             state.charts.pareto.on('click', function(params) {
                 if (params.name) {
-                    state.filters.keyword = params.name;
-                    document.getElementById('filterKeyword').value = params.name;
-                    applyFilters();
+                    // 从可能的截断名恢复完整名
+                    const fullReason = getFullReasonName(params.name);
+                    filterByReason(fullReason);
                 }
             });
             
             // 责任划分
             state.charts.responsibility = echarts.init(document.getElementById('chartResponsibility'));
+            state.charts.responsibility.on('click', function(params) {
+                if (params.name) {
+                    filterByResponsibility(params.name);
+                }
+            });
             
             // 趋势图
             state.charts.trend = echarts.init(document.getElementById('chartTrend'));
             state.charts.trend.on('click', function(params) {
                 if (params.name) {
-                    state.filters.startDate = params.name;
-                    state.filters.endDate = params.name;
-                    document.getElementById('filterStartDate').value = params.name;
-                    document.getElementById('filterEndDate').value = params.name;
+                    if (state.filters.startDate === params.name && state.filters.endDate === params.name) {
+                        state.filters.startDate = '';
+                        state.filters.endDate = '';
+                        document.getElementById('filterStartDate').value = '';
+                        document.getElementById('filterEndDate').value = '';
+                    } else {
+                        state.filters.startDate = params.name;
+                        state.filters.endDate = params.name;
+                        document.getElementById('filterStartDate').value = params.name;
+                        document.getElementById('filterEndDate').value = params.name;
+                    }
                     applyFilters();
                 }
             });
@@ -1598,9 +1659,7 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
             state.charts.partTrend = echarts.init(document.getElementById('chartPartTrend'));
             state.charts.partTrend.on('click', function(params) {
                 if (params.seriesName && params.seriesName !== '总计') {
-                    state.filters.part = params.seriesName;
-                    document.getElementById('filterPart').value = params.seriesName;
-                    applyFilters();
+                    filterByPart(params.seriesName);
                 }
             });
             
@@ -2223,24 +2282,140 @@ window.EMBEDDED_AFTER_SALES_DATA = [{"id": "Q20-Q200PReRf2903571-2026-06-11-人�
 
         // ==================== 交互增强 ====================
         function filterByCategory(category) {
-            state.filters.category = category;
-            document.getElementById('filterCategory').value = category;
+            if (state.filters.category === category) {
+                // 再次点击同一分类，取消筛选
+                state.filters.category = '';
+                document.getElementById('filterCategory').value = '';
+            } else {
+                state.filters.category = category;
+                document.getElementById('filterCategory').value = category;
+            }
             applyFilters();
         }
 
         function filterByModel(model) {
-            state.filters.model = model;
-            document.getElementById('filterModel').value = model;
+            if (state.filters.model === model) {
+                state.filters.model = '';
+                document.getElementById('filterModel').value = '';
+            } else {
+                state.filters.model = model;
+                document.getElementById('filterModel').value = model;
+            }
+            applyFilters();
+        }
+
+        function filterByReason(reason) {
+            if (state.filters.reason === reason) {
+                state.filters.reason = '';
+                document.getElementById('filterReason').value = '';
+            } else {
+                state.filters.reason = reason;
+                document.getElementById('filterReason').value = reason;
+            }
+            applyFilters();
+        }
+
+        // 帕累托图X轴名称可能被截断（>8字符加...），需要恢复完整名
+        function getFullReasonName(displayName) {
+            if (!displayName.includes('...')) return displayName;
+            const prefix = displayName.replace('...', '');
+            const match = [...new Set(state.rawData.map(r => r.reason))]
+                .find(r => r && r.startsWith(prefix));
+            return match || displayName;
+        }
+
+        function filterByResponsibility(resp) {
+            if (state.filters.responsibility === resp) {
+                state.filters.responsibility = '';
+                document.getElementById('filterResponsibility').value = '';
+            } else {
+                state.filters.responsibility = resp;
+                document.getElementById('filterResponsibility').value = resp;
+            }
+            applyFilters();
+        }
+
+        function filterByPart(part) {
+            if (state.filters.part === part) {
+                state.filters.part = '';
+                document.getElementById('filterPart').value = '';
+            } else {
+                state.filters.part = part;
+                document.getElementById('filterPart').value = part;
+            }
             applyFilters();
         }
 
         function filterByToday() {
             const today = new Date().toISOString().split('T')[0];
-            state.filters.startDate = today;
-            state.filters.endDate = today;
-            document.getElementById('filterStartDate').value = today;
-            document.getElementById('filterEndDate').value = today;
+            if (state.filters.startDate === today && state.filters.endDate === today) {
+                state.filters.startDate = '';
+                state.filters.endDate = '';
+                document.getElementById('filterStartDate').value = '';
+                document.getElementById('filterEndDate').value = '';
+            } else {
+                state.filters.startDate = today;
+                state.filters.endDate = today;
+                document.getElementById('filterStartDate').value = today;
+                document.getElementById('filterEndDate').value = today;
+            }
             applyFilters();
+        }
+
+        function updateFilterTags() {
+            const container = document.getElementById('filterTags');
+            const tags = [];
+            const labels = {
+                model: '型号', category: '分类', part: '部件',
+                reason: '故障原因', responsibility: '责任归属',
+                startDate: '开始日期', endDate: '结束日期', keyword: '关键词'
+            };
+            const categoryLabels = { hardware: '硬件不良', human: '人为不良', software: '软件问题', ok: '复测OK', pending: '待归类' };
+            
+            for (const [key, value] of Object.entries(state.filters)) {
+                if (value) {
+                    let displayValue = value;
+                    if (key === 'category') displayValue = categoryLabels[value] || value;
+                    tags.push({ key, value, label: `${labels[key]}: ${displayValue}` });
+                }
+            }
+            
+            container.innerHTML = tags.map(t => 
+                `<span class="filter-tag" onclick="removeFilter('${t.key}')">${t.label} <span class="tag-close">×</span></span>`
+            ).join('');
+        }
+
+        function removeFilter(key) {
+            state.filters[key] = '';
+            const el = document.getElementById('filter' + key.charAt(0).toUpperCase() + key.slice(1));
+            if (el) el.value = '';
+            applyFilters();
+        }
+
+        function populateDynamicFilters() {
+            // 动态生成故障原因下拉选项
+            const reasonSet = new Set();
+            const respSet = new Set();
+            state.rawData.forEach(r => {
+                if (r.reason) reasonSet.add(r.reason);
+                if (r.responsibility) respSet.add(r.responsibility);
+            });
+            
+            const reasonSelect = document.getElementById('filterReason');
+            const currentReason = reasonSelect.value;
+            reasonSelect.innerHTML = '<option value="">全部原因</option>';
+            [...reasonSet].sort().forEach(r => {
+                reasonSelect.innerHTML += `<option value="${r}">${r}</option>`;
+            });
+            reasonSelect.value = currentReason;
+            
+            const respSelect = document.getElementById('filterResponsibility');
+            const currentResp = respSelect.value;
+            respSelect.innerHTML = '<option value="">全部责任</option>';
+            [...respSet].sort().forEach(r => {
+                respSelect.innerHTML += `<option value="${r}">${r}</option>`;
+            });
+            respSelect.value = currentResp;
         }
 
         function toggleDarkMode() {
